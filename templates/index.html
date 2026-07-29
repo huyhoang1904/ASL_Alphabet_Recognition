@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASL Real-time Translation</title>
+
+    <!-- Tải bộ giao diện Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tải các thư viện cốt lõi của MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center py-10 font-sans">
+
+    <h1 class="text-3xl font-bold mb-2 text-green-400">ASL Real-time Translator</h1>
+    <!-- Dòng thông báo trạng thái tải -->
+    <p id="status-text" class="text-yellow-400 mb-6 animate-pulse">Đang tải thư viện AI và khởi động Camera...</p>
+
+    <!-- Khu vực 1: Webcam & Status -->
+    <div class="relative w-[640px] h-[480px] bg-black rounded-xl overflow-hidden shadow-2xl border-4 border-gray-700">
+        <!-- Video ẩn để thu hình -->
+        <video id="webcam" class="hidden" autoplay playsinline></video>
+        <!-- Canvas để vẽ hình ảnh và khung xương -->
+        <canvas id="output_canvas" width="1280" height="720" class="absolute top-0 left-0 w-full h-full transform scale-x-[-1]"></canvas>
+
+        <!-- Box hiển thị chữ cái hiện tại (góc trên bên trái) -->
+        <div class="absolute top-4 left-4 bg-black bg-opacity-70 px-4 py-2 rounded-lg border border-gray-600">
+            <span class="text-gray-300 text-sm">Chữ hiện tại</span><br>
+            <span id="current_char" class="text-4xl font-bold text-yellow-400">Waiting...</span>
+        </div>
+    </div>
+
+    <!-- Khu vực 2: Khung Text Kết quả -->
+    <div class="w-[640px] mt-6">
+        <label class="block text-gray-400 text-sm font-semibold mb-2">Văn bản đã dịch:</label>
+        <div id="sentence_output" class="w-full min-h-[80px] bg-gray-800 text-2xl px-4 py-4 rounded-lg border border-gray-600 break-words whitespace-pre-wrap"></div>
+    </div>
+
+    <!-- Khu vực 3: Bảng điều khiển -->
+    <div class="w-[640px] mt-4 flex gap-4">
+        <button onclick="clearText()" class="flex-1 bg-red-600 hover:bg-red-700 py-3 rounded-lg font-bold transition shadow-lg">🗑️ Xóa tất cả</button>
+        <button onclick="backspaceText()" class="flex-1 bg-yellow-600 hover:bg-yellow-700 py-3 rounded-lg font-bold transition shadow-lg text-white">⌫ Xóa lùi</button>
+        <button onclick="addSpace()" class="flex-1 bg-blue-600 hover:bg-blue-700 py-3 rounded-lg font-bold transition shadow-lg">⎵ Dấu cách</button>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. THUẬT TOÁN STABILIZER & TEXT BUILDER
+        // ==========================================
+        const STABILIZER_WINDOW = 25;
+        const STABILIZER_THRESHOLD = 20;
+        let predictionWindow = [];
+
+        const SPACE_TIMEOUT = 45;
+        const COOLDOWN_TIMEOUT = 30;
+        let emptyFrames = 0;
+        let spaceAdded = false;
+        let currentCooldown = 0;
+        let lastChar = null;
+        let currentSentence = "";
+
+        const sentenceOutput = document.getElementById('sentence_output');
+        const currentCharUI = document.getElementById('current_char');
+        const statusText = document.getElementById('status-text');
+
+        // Hàm đếm tần suất xuất hiện nhiều nhất trong Cửa sổ trượt
+        function getMostCommon(arr) {
+            const counts = arr.reduce((a, c) => { a[c] = (a[c] || 0) + 1; return a; }, {});
+            const maxCount = Math.max(...Object.values(counts));
+            const mostFrequent = Object.keys(counts).find(k => counts[k] === maxCount);
+            return { label: mostFrequent, count: maxCount };
+        }
+
+        // Logic ghép chữ
+        function processTextBuilder(stableChar, handVisible) {
+            if (!handVisible) {
+                emptyFrames++;
+                lastChar = null;
+                currentCooldown = 0; // Hủy đóng băng ngay khi giấu tay
+
+                // Tự động thêm dấu cách nếu giấu tay đủ lâu
+                if (emptyFrames > SPACE_TIMEOUT && !spaceAdded) {
+                    if (currentSentence.length > 0 && currentSentence.slice(-1) !== " ") {
+                        currentSentence += " ";
+                        sentenceOutput.innerText = currentSentence + "|";
+                    }
+                    spaceAdded = true;
+                }
+            } else {
+                emptyFrames = 0;
+                spaceAdded = false;
+
+                // Nếu đang trong thời gian đóng băng (cooldown) thì bỏ qua
+                if (currentCooldown > 0) {
+                    currentCooldown--;
+                    return;
+                }
+
+                // Nếu chốt được chữ mới ổn định
+                if (stableChar !== "Waiting..." && stableChar !== lastChar) {
+                    if (stableChar === 'DEL') {
+                        currentSentence = currentSentence.slice(0, -1);
+                    } else {
+                        currentSentence += stableChar;
+                    }
+                    sentenceOutput.innerText = currentSentence + "|";
+
+                    lastChar = stableChar;
+                    currentCooldown = COOLDOWN_TIMEOUT; // Kích hoạt đóng băng
+                }
+            }
+        }
+
+        // ==========================================
+        // 2. CÁC NÚT ĐIỀU KHIỂN UI
+        // ==========================================
+        function clearText() {
+            currentSentence = "";
+            sentenceOutput.innerText = "|";
+        }
+        function backspaceText() {
+            currentSentence = currentSentence.slice(0, -1);
+            sentenceOutput.innerText = currentSentence + "|";
+        }
+        function addSpace() {
+            currentSentence += " ";
+            sentenceOutput.innerText = currentSentence + "|";
+        }
+
+        // Thiết lập UI mặc định ban đầu
+        sentenceOutput.innerText = "|";
+
+        // ==========================================
+        // 3. MEDIAPIPE & CAMERA LOGIC
+        // ==========================================
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            // Vẽ hình ảnh từ camera lên canvas
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            let handVisible = false;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                handVisible = true;
+                const landmarks = results.multiHandLandmarks[0];
+
+                // Vẽ khung xương tay
+                drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+                drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2, radius: 3});
+
+                // Rút trích 42 tọa độ thô
+                let features = [];
+                for (let i = 0; i < 21; i++) {
+                    features.push(landmarks[i].x, landmarks[i].y);
+                }
+
+                // Gửi tọa độ lên FastAPI Backend
+                fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ features: features })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if(data.prediction && !data.error) {
+                        // Nạp chữ cái thô vào Cửa sổ trượt
+                        predictionWindow.push(data.prediction);
+                        if (predictionWindow.length > STABILIZER_WINDOW) {
+                            predictionWindow.shift();
+                        }
+
+                        let stableStatic = "Waiting...";
+                        if (predictionWindow.length === STABILIZER_WINDOW) {
+                            const common = getMostCommon(predictionWindow);
+                            // Kiểm tra Threshold
+                            if (common.count >= STABILIZER_THRESHOLD) {
+                                stableStatic = common.label;
+                            }
+                        }
+
+                        // Cập nhật UI và đẩy vào luồng Text Builder
+                        currentCharUI.innerText = stableStatic;
+                        processTextBuilder(stableStatic, true);
+                    }
+                }).catch(err => {
+                    console.error("Lỗi kết nối API:", err);
+                    currentCharUI.innerText = "Lỗi API";
+                });
+            } else {
+                currentCharUI.innerText = "Waiting...";
+                processTextBuilder("Waiting...", false);
+            }
+            canvasCtx.restore();
+        }
+
+        // Khởi tạo thư viện MediaPipe
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5,
+            selfieMode: true
+        });
+        hands.onResults(onResults);
+
+        // Kích hoạt Camera
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 1280,
+            height: 720
+        });
+
+        // Cập nhật dòng trạng thái khi Camera chạy thành công
+        camera.start().then(() => {
+            statusText.innerText = "🟢 Camera và AI đã sẵn sàng hoạt động!";
+            statusText.classList.remove('text-yellow-400', 'animate-pulse');
+            statusText.classList.add('text-green-400');
+        });
+    </script>
+</body>
+</html>
