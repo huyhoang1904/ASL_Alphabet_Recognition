@@ -24,7 +24,7 @@
         <!-- Video ẩn để thu hình -->
         <video id="webcam" class="hidden" autoplay playsinline></video>
         <!-- Canvas để vẽ hình ảnh và khung xương -->
-        <canvas id="output_canvas" width="1280" height="720" class="absolute top-0 left-0 w-full h-full transform scale-x-[-1]"></canvas>
+        <canvas id="output_canvas" width="640" height="480" class="absolute top-0 left-0 w-full h-full transform scale-x-[-1]"></canvas>
 
         <!-- Box hiển thị chữ cái hiện tại (góc trên bên trái) -->
         <div class="absolute top-4 left-4 bg-black bg-opacity-70 px-4 py-2 rounded-lg border border-gray-600">
@@ -50,8 +50,8 @@
         // ==========================================
         // 1. THUẬT TOÁN STABILIZER & TEXT BUILDER
         // ==========================================
-        const STABILIZER_WINDOW = 25;
-        const STABILIZER_THRESHOLD = 20;
+        const STABILIZER_WINDOW = 30;
+        const STABILIZER_THRESHOLD = 25;
         let predictionWindow = [];
 
         const SPACE_TIMEOUT = 45;
@@ -217,8 +217,8 @@
             onFrame: async () => {
                 await hands.send({image: videoElement});
             },
-            width: 1280,
-            height: 720
+            width: 640,
+            height: 480
         });
 
         // Cập nhật dòng trạng thái khi Camera chạy thành công

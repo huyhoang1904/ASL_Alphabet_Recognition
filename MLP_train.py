@@ -81,7 +81,21 @@ if __name__ == "__main__":
 
     print("2. Đang khởi tạo mô hình PyTorch...")
     model = ASLNeuralNetwork(input_size=42, num_classes=num_classes)
-    criterion = nn.CrossEntropyLoss()
+
+    # --- BẮT ĐẦU: ÁP DỤNG CLASS WEIGHTS ---
+    class_weights = torch.ones(num_classes)
+    hard_classes = ['A', 'S', 'M']
+
+    print("   -> Đang thiết lập Trọng số phạt (Class Weights):")
+    for char in hard_classes:
+        if char in le.classes_:
+            idx = le.transform([char])[0]
+            class_weights[idx] = 3.0  # Tăng mức phạt lên 3 lần
+            print(f"      + Nhãn '{char}' (index {idx}): weight = 3.0")
+
+    # Đưa trọng số vào hàm Loss
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
+    # --- KẾT THÚC: ÁP DỤNG CLASS WEIGHTS ---
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     print("3. Bắt đầu huấn luyện...")
@@ -136,8 +150,8 @@ if __name__ == "__main__":
         # --- LƯU MÔ HÌNH TỐT NHẤT ---
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            torch.save(model.state_dict(), 'asl_mlp_model_best_4.pth')
+            torch.save(model.state_dict(), 'asl_mlp_model_best_6.pth')
             print(f"   -> [Cập nhật] Đã lưu mô hình tốt nhất với Val Loss: {best_val_loss:.4f}")
 
     print("\n4. Hoàn tất huấn luyện!")
-    print("Mô hình hoạt động tốt nhất (chưa bị overfitting) đã được lưu tại 'asl_mlp_model_best_4.pth'")
+    print("Mô hình hoạt động tốt nhất (chưa bị overfitting) đã được lưu tại 'asl_mlp_model_best_6.pth'")
