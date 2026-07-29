@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
     # --- BẮT ĐẦU: ÁP DỤNG CLASS WEIGHTS ---
     class_weights = torch.ones(num_classes)
-    hard_classes = ['A', 'S', 'M']
+    hard_classes = ['A', 'S']
 
     print("   -> Đang thiết lập Trọng số phạt (Class Weights):")
     for char in hard_classes:
@@ -150,8 +150,8 @@ if __name__ == "__main__":
         # --- LƯU MÔ HÌNH TỐT NHẤT ---
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            torch.save(model.state_dict(), 'asl_mlp_model_best_6.pth')
+            torch.save(model.state_dict(), 'asl_mlp_model_best_7.pth')
             print(f"   -> [Cập nhật] Đã lưu mô hình tốt nhất với Val Loss: {best_val_loss:.4f}")
 
     print("\n4. Hoàn tất huấn luyện!")
-    print("Mô hình hoạt động tốt nhất (chưa bị overfitting) đã được lưu tại 'asl_mlp_model_best_6.pth'")
+    print("Mô hình hoạt động tốt nhất (chưa bị overfitting) đã được lưu tại 'asl_mlp_model_best_7.pth'")

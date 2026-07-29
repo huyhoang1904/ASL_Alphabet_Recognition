@@ -26,7 +26,7 @@ class ASLNeuralNetwork(nn.Module):
 # Load Model
 le = joblib.load('label_encoder_nn.pkl')
 model = ASLNeuralNetwork(input_size=42, num_classes=len(le.classes_))
-model.load_state_dict(torch.load('asl_mlp_model_best_6.pth', map_location='cpu'))
+model.load_state_dict(torch.load('asl_mlp_model_best_7.pth', map_location='cpu'))
 model.eval()
 
 

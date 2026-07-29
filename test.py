@@ -184,7 +184,7 @@ num_classes = len(le.classes_)
 
 # Khởi tạo khung mô hình và nạp trọng số
 nn_model = ASLNeuralNetwork(input_size=42, num_classes=num_classes)
-nn_model.load_state_dict(torch.load('asl_mlp_model_best_6.pth'))
+nn_model.load_state_dict(torch.load('asl_mlp_model_best_7.pth'))
 nn_model.eval() # Bật chế độ suy luận (Tắt Dropout và BatchNorm)
 
 stabilizer = PredictionStabilizer(window_size=25, threshold=20)
