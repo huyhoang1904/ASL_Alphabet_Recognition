@@ -74,12 +74,20 @@
             return { label: mostFrequent, count: maxCount };
         }
 
-        // Logic ghép chữ
+        // Thêm hằng số dung sai (Cho phép nháy hình tối đa 5 frames)
+        const HAND_LOST_TOLERANCE = 5;
+
+        // Logic ghép chữ đã vá lỗi In lặp
         function processTextBuilder(stableChar, handVisible) {
             if (!handVisible) {
                 emptyFrames++;
-                lastChar = null;
-                currentCooldown = 0; // Hủy đóng băng ngay khi giấu tay
+
+                // SỬA LỖI: Chỉ reset hệ thống nếu mất tay thực sự lâu (vượt quá dung sai)
+                if (emptyFrames > HAND_LOST_TOLERANCE) {
+                    lastChar = null;
+                    currentCooldown = 0;
+                    predictionWindow = []; // QUAN TRỌNG: Xóa sạch 30 chữ cũ trong bộ đệm
+                }
 
                 // Tự động thêm dấu cách nếu giấu tay đủ lâu
                 if (emptyFrames > SPACE_TIMEOUT && !spaceAdded) {
@@ -93,7 +101,7 @@
                 emptyFrames = 0;
                 spaceAdded = false;
 
-                // Nếu đang trong thời gian đóng băng (cooldown) thì bỏ qua
+                // Nếu đang trong thời gian đóng băng thì bỏ qua
                 if (currentCooldown > 0) {
                     currentCooldown--;
                     return;
@@ -110,6 +118,9 @@
 
                     lastChar = stableChar;
                     currentCooldown = COOLDOWN_TIMEOUT; // Kích hoạt đóng băng
+
+                    // QUAN TRỌNG: Dọn sạch bộ đệm sau khi in để lần nhận diện tới phải gom đủ 30 phiếu từ đầu
+                    predictionWindow = [];
                 }
             }
         }
